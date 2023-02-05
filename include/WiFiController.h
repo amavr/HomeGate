@@ -1,4 +1,5 @@
-#pragma once
+#ifndef $WiFiController
+#define $WiFiController
 
 #include <Arduino.h>
 #include <EEPROM.h>
@@ -6,12 +7,8 @@
 // подключение к WiFi
 #include <ESP8266WiFi.h>
 
-// организация страницы настроек для поключения к WiFi
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
-
-#define SP_AP_NAME "ESP Config"   // название точки
-#define SP_AP_IP 192, 168, 100, 1 // IP точки
+// сайт настроек для поключения к WiFi
+#include "ConfigSite.h"
 
 struct TWiFiParams
 {
@@ -27,7 +24,7 @@ public:
     WiFiController(uint16_t SizeEEPROM);
     void connect();
     void disconnect();
-    void onUpload();
+    void reset();
     void tick();
 
 private:
@@ -81,12 +78,6 @@ void WiFiController::connect()
 
         Serial.println("done");
         break;
-        // выход из цикла только при успешном подключении
-        // поэтому параметры с которыми WiFi подключен сохраняются
-        // if (changed)
-        // {
-        //     saveWiFiParams();
-        // }
     }
 }
 
@@ -95,7 +86,7 @@ void WiFiController::disconnect()
     WiFi.disconnect();
 }
 
-void WiFiController::onUpload()
+void WiFiController::reset()
 {
     for (int i = 0; i < (int)EEPROM.length(); i++)
     {
@@ -129,11 +120,19 @@ bool WiFiController::runSite()
 {
     bool changed = true;
 
+    ConfigSite site(this->cfg.ssid, this->cfg.pass, 240);
+    site.run();
+    strcpy(this->cfg.ssid, _ssid);
+    strcpy(this->cfg.pass, _pass);
+
     // strcpy(cfg.ssid, String("gvv").c_str());
     // strcpy(cfg.pass, String("09090909").c_str());
 
-    strcpy(this->cfg.ssid, String("amavr").c_str());
-    strcpy(this->cfg.pass, String("oooooooo").c_str());
+    // strcpy(this->cfg.ssid, String("amavr").c_str());
+    // strcpy(this->cfg.pass, String("oooooooo").c_str());
 
     return changed;
 }
+
+
+#endif
