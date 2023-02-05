@@ -24,48 +24,69 @@ struct TWiFiParams
 class WiFiController
 {
 public:
+    WiFiController(uint16_t SizeEEPROM);
     void connect();
     void disconnect();
     void onUpload();
+    void tick();
 
 private:
+    uint16_t eepromSize;
     TWiFiParams cfg;
     void loadWiFiParams();
     void saveWiFiParams();
     bool runSite();
 };
 
+WiFiController::WiFiController(uint16_t SizeEEPROM = 256)
+{
+    this->eepromSize = SizeEEPROM;
+    Serial.printf("SizeEEPROM:%d\n", SizeEEPROM);
+    EEPROM.begin(this->eepromSize);
+}
+
 void WiFiController::connect()
 {
-    bool changed = false;
-    loadWiFiParams();
-    WiFi.begin(cfg.ssid, cfg.pass);
-    uint32_t started = millis();
-    uint32_t period = cfg.connectPeriod * 1000;
-    Serial.printf("Connecting to %s", cfg.ssid);
-    while (WiFi.status() != WL_CONNECTED)
+    while (true)
     {
-        delay(500);
-        Serial.print('.');
-        if (millis() - started > period)
+        bool changed = false;
+        loadWiFiParams();
+        WiFi.begin(this->cfg.ssid, this->cfg.pass);
+        uint32_t started = millis();
+        uint32_t period = cfg.connectPeriod * 1000;
+        Serial.printf("Connecting to %s", cfg.ssid);
+        while (WiFi.status() != WL_CONNECTED)
         {
-            Serial.println("timeout");
-            changed = runSite();
-            if (changed)
+            delay(500);
+            Serial.print('.');
+            if (millis() - started > period)
             {
-                WiFi.disconnect(true, true);
-                WiFi.begin(cfg.ssid, cfg.pass);
+                Serial.println("timeout");
+                changed = runSite();
+                if (changed)
+                {
+                    WiFi.disconnect(true, true);
+                    saveWiFiParams();
+                    Serial.printf("saved ssid:%s passw:%s\n", this->cfg.ssid, this->cfg.pass);
+                    break;
+                    // WiFi.begin(this->cfg.ssid, this->cfg.pass);
+                }
+                // Serial.printf("Connecting to %s", cfg.ssid);
+                // started = millis();
             }
-            Serial.printf("Connecting to %s", cfg.ssid);
-            started = millis();
         }
-    }
-    Serial.println("done");
-    // выход из цикла только при успешном подключении
-    // поэтому параметры с которыми WiFi подключен сохраняются
-    if (changed)
-    {
-        saveWiFiParams();
+        if(changed){
+            continue;
+        }
+
+        Serial.println("done");
+        break;
+        // выход из цикла только при успешном подключении
+        // поэтому параметры с которыми WiFi подключен сохраняются
+        // if (changed)
+        // {
+        //     saveWiFiParams();
+        // }
     }
 }
 
@@ -76,7 +97,6 @@ void WiFiController::disconnect()
 
 void WiFiController::onUpload()
 {
-    EEPROM.begin(sizeof(TWiFiParams));
     for (int i = 0; i < (int)EEPROM.length(); i++)
     {
         EEPROM.put(i, 0);
@@ -85,15 +105,23 @@ void WiFiController::onUpload()
     EEPROM.commit();
 }
 
+void WiFiController::tick()
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        connect();
+    }
+}
+
 void WiFiController::loadWiFiParams()
 {
-    EEPROM.get(0, cfg);
+    EEPROM.get(0, this->cfg);
+    Serial.printf("load ssid:%s pass:%s\n", this->cfg.ssid, this->cfg.pass);
 }
 
 void WiFiController::saveWiFiParams()
 {
-    EEPROM.begin(sizeof(TWiFiParams));
-    EEPROM.put(0, cfg);
+    EEPROM.put(0, this->cfg);
     EEPROM.commit();
 }
 
@@ -104,8 +132,8 @@ bool WiFiController::runSite()
     // strcpy(cfg.ssid, String("gvv").c_str());
     // strcpy(cfg.pass, String("09090909").c_str());
 
-    strcpy(cfg.ssid, String("amavr").c_str());
-    strcpy(cfg.pass, String("oooooooo").c_str());
+    strcpy(this->cfg.ssid, String("amavr").c_str());
+    strcpy(this->cfg.pass, String("oooooooo").c_str());
 
     return changed;
 }
