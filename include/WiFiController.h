@@ -22,7 +22,7 @@ class WiFiController
 {
 public:
     WiFiController(uint16_t SizeEEPROM);
-    void connect();
+    void connect(bool isFirtsTime);
     void disconnect();
     void reset();
     void tick();
@@ -37,18 +37,23 @@ private:
 
 WiFiController::WiFiController(uint16_t SizeEEPROM = 256)
 {
-    this->eepromSize = SizeEEPROM;
+    eepromSize = SizeEEPROM;
     Serial.printf("SizeEEPROM:%d\n", SizeEEPROM);
-    EEPROM.begin(this->eepromSize);
+    EEPROM.begin(eepromSize);
 }
 
-void WiFiController::connect()
+void WiFiController::connect(bool isFirstTime)
 {
+    if (isFirstTime)
+    {
+        reset();
+    }
+
     while (true)
     {
         bool changed = false;
         loadWiFiParams();
-        WiFi.begin(this->cfg.ssid, this->cfg.pass);
+        WiFi.begin(cfg.ssid, cfg.pass);
         uint32_t started = millis();
         uint32_t period = cfg.connectPeriod * 1000;
         Serial.printf("Connecting to %s", cfg.ssid);
@@ -59,26 +64,24 @@ void WiFiController::connect()
             if (millis() - started > period)
             {
                 Serial.println("timeout");
+                Serial.print("run AP to change config. Waiting changes...");
                 changed = runSite();
+                Serial.println(changed ? "has change" : "no change");
                 if (changed)
                 {
-                    WiFi.disconnect(true, true);
                     saveWiFiParams();
-                    Serial.printf("saved ssid:%s passw:%s\n", this->cfg.ssid, this->cfg.pass);
-                    break;
-                    // WiFi.begin(this->cfg.ssid, this->cfg.pass);
+                    Serial.printf("saved ssid:%s passw:%s\n", cfg.ssid, cfg.pass);
                 }
-                // Serial.printf("Connecting to %s", cfg.ssid);
-                // started = millis();
+                // если не было изменений параметров
+                // все равно проверять подключение,
+                // может роутер выключался
+                WiFi.disconnect(true, true);
+                break;
             }
         }
-        if(changed){
-            continue;
-        }
-
-        Serial.println("done");
-        break;
     }
+    Serial.println("done");
+    Serial.println(WiFi.localIP());
 }
 
 void WiFiController::disconnect()
@@ -100,39 +103,30 @@ void WiFiController::tick()
 {
     if (WiFi.status() != WL_CONNECTED)
     {
-        connect();
+        connect(false);
     }
 }
 
 void WiFiController::loadWiFiParams()
 {
-    EEPROM.get(0, this->cfg);
-    Serial.printf("load ssid:%s pass:%s\n", this->cfg.ssid, this->cfg.pass);
+    EEPROM.get(0, cfg);
+    Serial.printf("load ssid:%s pass:%s\n", cfg.ssid, cfg.pass);
 }
 
 void WiFiController::saveWiFiParams()
 {
-    EEPROM.put(0, this->cfg);
+    EEPROM.put(0, cfg);
     EEPROM.commit();
 }
 
 bool WiFiController::runSite()
 {
-    bool changed = true;
-
-    ConfigSite site(this->cfg.ssid, this->cfg.pass, 240);
+    ConfigSite site(cfg.ssid, cfg.pass, 240);
     site.run();
-    strcpy(this->cfg.ssid, _ssid);
-    strcpy(this->cfg.pass, _pass);
-
-    // strcpy(cfg.ssid, String("gvv").c_str());
-    // strcpy(cfg.pass, String("09090909").c_str());
-
-    // strcpy(this->cfg.ssid, String("amavr").c_str());
-    // strcpy(this->cfg.pass, String("oooooooo").c_str());
-
+    bool changed = (strcmp(cfg.ssid, _ssid) != 0) || (strcmp(cfg.pass, _pass) != 0);
+    strcpy(cfg.ssid, _ssid);
+    strcpy(cfg.pass, _pass);
     return changed;
 }
-
 
 #endif

@@ -9,8 +9,6 @@
 
 #define NAME_AP "ESP Config" // название точки
 
-#include <FS.h>
-
 #include <DNSServer.h>
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
@@ -36,12 +34,33 @@ static IPAddress _ipAP(192, 168, 100, 1);
 #define SP_EXIT 4
 #define SP_TIMEOUT 5
 
-// static DNSServer _dnsServer;
-// #ifdef ESP8266
-// static ESP8266WebServer _webServer(80);
-// #else
-// static WebServer _webServer(80);
-// #endif
+const char html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head><body>
+<style type="text/css">
+    input[type="text"] {margin-bottom:8px;font-size:20px;}
+    input[type="submit"] {width:180px; height:60px;margin-bottom:8px;font-size:20px;}
+</style>
+<center>
+<h3>WiFi settings</h3>
+<form action="/connect" method="POST">
+    <input type="text" name="ssid" placeholder="SSID">
+    <input type="text" name="pass" placeholder="Pass">
+    <input type="submit" value="Submit">
+</form>
+<h3>Switch WiFi mode</h3>
+<form action="/ap" method="POST">
+    <input type="submit" value="Access Point">
+</form>
+<form action="/local" method="POST">
+    <input type="submit" value="Local Mode">
+</form>
+<form action="/exit" method="POST">
+    <input type="submit" value="Exit Portal">
+</form>
+</center>
+</body></html>)rawliteral";
 
 class ConfigSite
 {
@@ -81,7 +100,7 @@ ConfigSite::ConfigSite(const char *ssid, const char *pass, uint16_t lifeTimeSec)
     strcpy(_pass, pass);
     _lifeTime = lifeTimeSec * 1000;
 
-    SPIFFS.begin(); // Start the SPI Flash Files System
+    // SPIFFS.begin(); // Start the SPI Flash Files System
 }
 
 void ConfigSite::handleConnect()
@@ -179,8 +198,9 @@ void ConfigSite::start()
     WiFi.softAP(_ssidAP);
 
     _webServer.onNotFound([]() {                                  // If the client requests any URI
-        if (!handleFileRead(_webServer.uri()))                    // send it if it exists
-            _webServer.send(404, "text/plain", "404: Not Found"); // otherwise, respond with a 404 (Not Found) error
+        _webServer.send(200, "text/html", html);
+        // if (!handleFileRead(_webServer.uri()))                    // send it if it exists
+        //     _webServer.send(404, "text/plain", "404: Not Found"); // otherwise, respond with a 404 (Not Found) error
     });
     _webServer.on("/generate_204", HTTP_GET, handleRoot);
     _webServer.on("/connect", HTTP_POST, handleConnect);
