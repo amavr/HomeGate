@@ -3,7 +3,6 @@
 #include <ESP8266WiFi.h>
 // #include <ESPAsyncUDP.h>
 #include <WiFiUdp.h>
-#include <GParser.h>
 
 #include "DicList.h"
 
@@ -77,6 +76,62 @@ private:
         EEPROM.commit();
     }
 
+    // нормализация 
+    void normalize(const char *sour, char *dest)
+    {
+        int sour_len = strlen(sour);
+        if (sour_len == 0)
+        {
+            dest[0] = '\0';
+            return;
+        }
+
+        int di = 0;
+        bool prev_space = true;
+        for (int si = 0; si < sour_len; si++)
+        {
+            // пропуск двойных пробелов
+            if (sour[si] == ' ')
+            {
+                // ранее было начало строки или пробел?
+                if (prev_space)
+                {
+                    continue;
+                }
+                else
+                {
+                    // значимый пробел (после непробельного символа)
+                    dest[di++] = sour[si];
+                    // но след.пробел надо пропустить
+                    prev_space = true;
+                }
+            }
+            // пришел не пробел
+            else
+            {
+                dest[di++] = sour[si];
+                prev_space = false;
+            }
+        }
+        // компенсация последнего инкремента
+        di--;
+        if (di < 0)
+        {
+            dest[0] = '\0';
+            return;
+        }
+
+        int dest_len = strlen(dest);
+        // последний символ - пробел?
+        if (dest_len > 0 && dest[dest_len - 1] == ' ')
+        {
+            // перенести конец строки влево
+            di--;
+        }
+        // установить конец строки
+        dest[di] = '\0';
+    }
+
 public:
     UdpInformer(uint16_t sizeEEPROM)
     {
@@ -146,59 +201,4 @@ public:
     {
         return dic->get(resourceId);
     }
-
-    void normalize(const char *sour, char *dest)
-    {
-        int sour_len = strlen(sour);
-        if (sour_len == 0)
-        {
-            dest[0] = '\0';
-            return;
-        }
-
-        int di = 0;
-        bool prev_space = true;
-        for (int si = 0; si < sour_len; si++)
-        {
-            // пропуск двойных пробелов
-            if (sour[si] == ' ')
-            {
-                // ранее было начало строки или пробел?
-                if (prev_space)
-                {
-                    continue;
-                }
-                else
-                {
-                    // значимый пробел (после непробельного символа)
-                    dest[di++] = sour[si];
-                    // но след.пробел надо пропустить
-                    prev_space = true;
-                }
-            }
-            // пришел не пробел
-            else
-            {
-                dest[di++] = sour[si];
-                prev_space = false;
-            }
-        }
-        // компенсация последнего инкремента
-        di--;
-        if(di < 0){
-            dest[0] = '\0';
-            return;
-        }
-
-        int dest_len = strlen(dest);
-        // последний символ - пробел?
-        if (dest_len > 0 && dest[dest_len - 1] == ' ')
-        {
-            // перенести конец строки влево
-            di--;
-        }
-        // установить конец строки
-        dest[di] = '\0';
-    }
-
 };

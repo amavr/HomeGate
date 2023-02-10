@@ -34,38 +34,17 @@ void testDic()
 
 void testInformer()
 {
-    char sour1[20] = "  a  hello b  1  ";
-    char sour2[20] = "";
-    char sour3[20] = "     ";
-    char dest[20];
+    // char sour1[20] = "  a  hello b  1  ";
+    // char sour2[20] = "";
+    // char sour3[20] = "     ";
+    // char dest[20];
 
-    informer.normalize(sour1, dest);
-    Serial.printf("sour1.normalize: [%s]\n", dest);
-    informer.normalize(sour2, dest);
-    Serial.printf("sour2.normalize: [%s]\n", dest);
-    informer.normalize(sour3, dest);
-    Serial.printf("sour3.normalize: [%s]\n", dest);
-
-    // informer.trim(sour1, dest);
-    // Serial.printf("sour1.trim: [%s]\n", dest);
-    // informer.trim(sour2, dest);
-    // Serial.printf("sour2.trim: [%s]\n", dest);
-    // informer.trim(sour3, dest);
-    // Serial.printf("sour3.trim: [%s]\n", dest);
-
-    // informer.trimLeft(sour1, dest);
-    // Serial.printf("sour1.trimLeft: [%s]\n", dest);
-    // informer.trimLeft(sour2, dest);
-    // Serial.printf("sour2.trimLeft: [%s]\n", dest);
-    // informer.trimLeft(sour3, dest);
-    // Serial.printf("sour3.trimLeft: [%s]\n", dest);
-
-    // informer.trimRight(sour1, dest);
-    // Serial.printf("sour1.trimRight: [%s]\n", dest);
-    // informer.trimRight(sour2, dest);
-    // Serial.printf("sour2.trimRight: [%s]\n", dest);
-    // informer.trimRight(sour3, dest);
-    // Serial.printf("sour3.trimRight: [%s]\n", dest);
+    // informer.normalize(sour1, dest);
+    // Serial.printf("sour1.normalize: [%s]\n", dest);
+    // informer.normalize(sour2, dest);
+    // Serial.printf("sour2.normalize: [%s]\n", dest);
+    // informer.normalize(sour3, dest);
+    // Serial.printf("sour3.normalize: [%s]\n", dest);
 }
 
 void setup()

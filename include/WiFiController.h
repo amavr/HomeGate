@@ -12,8 +12,8 @@
 
 struct TWiFiParams
 {
-    uint16_t connectPeriod = 30; // длительность попытки подключения к WiFi в секундах
-    uint16_t siteLifeTime = 240; // длительность работы сайта для введения параметров подключения в секундах
+    int connectPeriod = 40; // длительность попытки подключения к WiFi в секундах
+    int siteLifeTime = 240; // длительность работы сайта для введения параметров подключения в секундах
     char ssid[20] = "x";
     char pass[20] = "x";
 };
@@ -54,7 +54,7 @@ void WiFiController::connect(bool isFirstTime)
         bool changed = false;
         loadWiFiParams();
         WiFi.begin(cfg.ssid, cfg.pass);
-        uint32_t started = millis();
+        unsigned long started = millis();
         uint32_t period = cfg.connectPeriod * 1000;
         Serial.printf("Connecting to %s", cfg.ssid);
         while (WiFi.status() != WL_CONNECTED)
@@ -63,10 +63,11 @@ void WiFiController::connect(bool isFirstTime)
             Serial.print('.');
             if (millis() - started > period)
             {
+                started = millis();
                 Serial.println("timeout");
-                Serial.print("run AP to change config. Waiting changes...");
+                Serial.println("Start AP to change config.");
                 changed = runSite();
-                Serial.println(changed ? "has change" : "no change");
+                Serial.println(changed ? "Stop AP with changes" : "Stop AP without changes");
                 if (changed)
                 {
                     saveWiFiParams();
@@ -78,6 +79,10 @@ void WiFiController::connect(bool isFirstTime)
                 WiFi.disconnect(true, true);
                 break;
             }
+        }
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            break;
         }
     }
     Serial.println("done");
@@ -121,12 +126,18 @@ void WiFiController::saveWiFiParams()
 
 bool WiFiController::runSite()
 {
-    ConfigSite site(cfg.ssid, cfg.pass, 240);
-    site.run();
-    bool changed = (strcmp(cfg.ssid, _ssid) != 0) || (strcmp(cfg.pass, _pass) != 0);
-    strcpy(cfg.ssid, _ssid);
-    strcpy(cfg.pass, _pass);
-    return changed;
+    strcpy(siteCfg.ssid, cfg.ssid);
+    strcpy(siteCfg.pass, cfg.pass);
+    siteCfg.lifeTimeSec = cfg.siteLifeTime;
+
+    run();
+
+    if (changed())
+    {
+        strcpy(cfg.ssid, siteCfg.ssid);
+        strcpy(cfg.pass, siteCfg.pass);
+    }
+    return changed();
 }
 
 #endif
