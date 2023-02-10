@@ -76,7 +76,82 @@ private:
         EEPROM.commit();
     }
 
-    // нормализация 
+
+    bool isCmd(const char *cmd, char *data)
+    {
+        size_t cmd_len = strlen(cmd);
+        size_t data_len = strlen(data);
+        // команда длиннее, чем анализируемый текст
+        // т.е. явно не та команда 
+        if(data_len < cmd_len)
+        {
+            return false;
+        }
+
+        // длина команды не менее 3 символов?
+        if (cmd_len >= 3)
+        {
+            // команда совпала?
+            if(strncmp(cmd, data, cmd_len) == 0)
+            {
+                // забрать параметры
+                // нет параметров?
+                if(cmd_len == data_len)
+                {
+                    data[0] = '\0';
+                }
+                else
+                {
+                    size_t prm_len = data_len - cmd_len;
+                    strncpy(data, data + cmd_len, prm_len);
+                    data[prm_len] = '\0';
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void onReceive(int size)
+    {
+        IPAddress remoteIp = udp.remoteIP();
+        uint16_t port = udp.localPort();
+
+        char buf[255];
+
+        int len = udp.read(buf, 255);
+        buf[len] = '\0';
+
+        char chars[255];
+        normalize(buf, chars);
+        Serial.println(chars);
+
+        if(isCmd("set role ", chars))
+        {
+            Serial.printf("set role: [%s]\n", chars);
+        }
+
+        if(isCmd("get role ", chars))
+        {
+            Serial.printf("get role: [%s]\n", chars);
+        }
+
+        char ans[] = "ack";
+        udp.beginPacket(udp.remoteIP(), udp.localPort());
+        udp.write(ans);
+        udp.endPacket();
+    }
+
+public:
+    UdpInformer(uint16_t sizeEEPROM)
+    {
+        dic = new DicList;
+        eeprom_dic_size = sizeEEPROM;
+    }
+
+    // нормализация пробелов + trim
     void normalize(const char *sour, char *dest)
     {
         int sour_len = strlen(sour);
@@ -90,15 +165,11 @@ private:
         bool prev_space = true;
         for (int si = 0; si < sour_len; si++)
         {
-            // пропуск двойных пробелов
+            // обработка пробелов
             if (sour[si] == ' ')
             {
-                // ранее было начало строки или пробел?
-                if (prev_space)
-                {
-                    continue;
-                }
-                else
+                // ранее было не начало строки и не пробел?
+                if (!prev_space)
                 {
                     // значимый пробел (после непробельного символа)
                     dest[di++] = sour[si];
@@ -113,30 +184,13 @@ private:
                 prev_space = false;
             }
         }
-        // компенсация последнего инкремента
-        di--;
-        if (di < 0)
-        {
-            dest[0] = '\0';
-            return;
-        }
 
-        int dest_len = strlen(dest);
-        // последний символ - пробел?
-        if (dest_len > 0 && dest[dest_len - 1] == ' ')
-        {
-            // перенести конец строки влево
-            di--;
-        }
-        // установить конец строки
         dest[di] = '\0';
-    }
-
-public:
-    UdpInformer(uint16_t sizeEEPROM)
-    {
-        dic = new DicList;
-        eeprom_dic_size = sizeEEPROM;
+        // на конце может оставаться значимый пробел
+        while(di > 0 && dest[--di] == ' ')
+        {
+            dest[di] = '\0';
+        }        
     }
 
     bool start(int port, bool isFirstTime)
@@ -157,33 +211,7 @@ public:
         int packetSize = udp.parsePacket();
         if (packetSize)
         {
-            IPAddress remoteIp = udp.remoteIP();
-
-            Serial.print(remoteIp);
-            Serial.print(":");
-            Serial.print(udp.remotePort());
-
-            Serial.print(" sent [");
-            Serial.print(packetSize);
-            Serial.print("] ");
-
-            // read the packet into packetBufffer
-            int len = udp.read(packetBuffer, 255);
-            if (len > 0)
-            {
-                packetBuffer[len] = 0;
-            }
-            Serial.println(packetBuffer);
-
-            char chars[255];
-            normalize(packetBuffer, chars);
-            Serial.println(chars);
-
-            // send a reply, to the IP address and port that sent us the packet we received
-            // udp.beginPacket(udp.remoteIP(), udp.remotePort());
-            udp.beginPacket(udp.remoteIP(), udp.localPort());
-            udp.write(ReplyBuffer);
-            udp.endPacket();
+            onReceive(packetSize);
         }
     }
 

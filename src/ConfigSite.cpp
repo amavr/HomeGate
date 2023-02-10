@@ -71,6 +71,7 @@ void start()
     WiFi.softAPConfig(addrAP, addrAP, subnet);
     WiFi.softAP("ESP Config");
 
+    // все неопознанные запросы идут на этот обработчик
     webServer.onNotFound([]() {
         webServer.send(200, "text/html", html);
     });
@@ -89,6 +90,7 @@ void stop()
     isStarted = false;
 }
 
+// цикл проверки HTTP запросов
 bool tick()
 {
     // тикает только когда запущен WEB сервер
@@ -108,21 +110,26 @@ bool tick()
     return false;
 }
 
+// запуск сайта с циклом контроля запросов и таймаута
 void run()
 {
     uint32_t beg = millis();
+    // запушен сайт    
     start();
 
     uint32_t timeout = siteCfg.lifeTimeSec * 1000;
 
+    // главный цикл
     while (tick())
     {
+        // не пора ли завершить его работу
         if (millis() - beg > timeout)
         {
             break;
         }
         yield();
     }
+    // завершено
     stop();
 }
 

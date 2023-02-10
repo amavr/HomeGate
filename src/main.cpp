@@ -34,17 +34,23 @@ void testDic()
 
 void testInformer()
 {
-    // char sour1[20] = "  a  hello b  1  ";
-    // char sour2[20] = "";
-    // char sour3[20] = "     ";
-    // char dest[20];
+    char sour1[20] = "hello 123";
+    char sour2[20] = " hello ";
+    char sour3[20] = "   hello 123  ";
+    char sour4[20] = "";
+    char sour5[20] = "     ";
+    char dest[20];
 
-    // informer.normalize(sour1, dest);
-    // Serial.printf("sour1.normalize: [%s]\n", dest);
-    // informer.normalize(sour2, dest);
-    // Serial.printf("sour2.normalize: [%s]\n", dest);
-    // informer.normalize(sour3, dest);
-    // Serial.printf("sour3.normalize: [%s]\n", dest);
+    informer.normalize(sour1, dest);
+    Serial.printf("sour1.normalize: [%s]\n", dest);
+    informer.normalize(sour2, dest);
+    Serial.printf("sour2.normalize: [%s]\n", dest);
+    informer.normalize(sour3, dest);
+    Serial.printf("sour3.normalize: [%s]\n", dest);
+    informer.normalize(sour4, dest);
+    Serial.printf("sour4.normalize: [%s]\n", dest);
+    informer.normalize(sour5, dest);
+    Serial.printf("sour5.normalize: [%s]\n", dest);
 }
 
 void setup()
@@ -53,7 +59,7 @@ void setup()
     delay(500);
 
     // testDic();
-    // testInformer();
+    testInformer();
 
     EEPROM.begin(sizeEEPROM);
 
