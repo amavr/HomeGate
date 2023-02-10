@@ -175,6 +175,10 @@ public:
             }
             Serial.println(packetBuffer);
 
+            char chars[255];
+            normalize(packetBuffer, chars);
+            Serial.println(chars);
+
             // send a reply, to the IP address and port that sent us the packet we received
             // udp.beginPacket(udp.remoteIP(), udp.remotePort());
             udp.beginPacket(udp.remoteIP(), udp.localPort());

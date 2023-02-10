@@ -60,13 +60,16 @@ void setup()
     // Признак первого запуска
     bool isFirstTime = EEPROM[128] != 0x22;
 
+    Serial.printf("isFirstTime: %d\n", isFirstTime);
+
     ctrl.connect(isFirstTime);
     informer.start(2222, isFirstTime);
 
     // после инициализации подключения и старта информера
     // EEPROM проинициализирована, поэтому сброс флага первого запуска
     if(isFirstTime){
-        // EEPROM[128] = 0x22;
+        EEPROM[128] = 0x22;
+        EEPROM.commit();
     }
 
 //    dc:4f:22:2c:32:c6
