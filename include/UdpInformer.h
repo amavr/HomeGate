@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 // #include <ESPAsyncUDP.h>
 #include <WiFiUdp.h>
+#include <GParser.h>
 
 #include "DicList.h"
 
@@ -76,14 +77,13 @@ private:
         EEPROM.commit();
     }
 
-
     bool isCmd(const char *cmd, char *data)
     {
         size_t cmd_len = strlen(cmd);
         size_t data_len = strlen(data);
         // команда длиннее, чем анализируемый текст
-        // т.е. явно не та команда 
-        if(data_len < cmd_len)
+        // т.е. явно не та команда
+        if (data_len < cmd_len)
         {
             return false;
         }
@@ -92,11 +92,11 @@ private:
         if (cmd_len >= 3)
         {
             // команда совпала?
-            if(strncmp(cmd, data, cmd_len) == 0)
+            if (strncmp(cmd, data, cmd_len) == 0)
             {
                 // забрать параметры
                 // нет параметров?
-                if(cmd_len == data_len)
+                if (cmd_len == data_len)
                 {
                     data[0] = '\0';
                 }
@@ -114,6 +114,13 @@ private:
         return false;
     }
 
+    void response(const char *answer, IPAddress host, uint16_t port)
+    {
+        udp.beginPacket(host, port);
+        udp.write(answer);
+        udp.endPacket();
+    }
+
     void onReceive(int size)
     {
         IPAddress remoteIp = udp.remoteIP();
@@ -124,24 +131,38 @@ private:
         int len = udp.read(buf, 255);
         buf[len] = '\0';
 
-        char chars[255];
-        normalize(buf, chars);
-        Serial.println(chars);
+        char text[255];
+        normalize(buf, text);
+        Serial.println(text);
 
-        if(isCmd("set role ", chars))
+        if (isCmd("set role ", text))
         {
-            Serial.printf("set role: [%s]\n", chars);
+            Serial.printf("set role: [%s]\n", text);
+            GParser data(text, ' ');
+            int count = data.split();
+            if(count == 2)
+            {
+                dic->set(data[0], data[1]);
+                response("ok", remoteIp, port);
+            }
+            else
+            {
+                sprintf(buf, "use: set role <name> <macaddr>");
+                response(buf, remoteIp, port);
+            }
         }
 
-        if(isCmd("get role ", chars))
+        if (isCmd("get role ", text))
         {
-            Serial.printf("get role: [%s]\n", chars);
+            Serial.printf("get role: [%s]\n", text);
+            GParser data(text, ' ');
+            int count = data.split();
+            for (int i = 0; i < count; i++)
+            {
+                Serial.printf("\t%s\n", data[i]);
+            }
         }
 
-        char ans[] = "ack";
-        udp.beginPacket(udp.remoteIP(), udp.localPort());
-        udp.write(ans);
-        udp.endPacket();
     }
 
 public:
@@ -187,10 +208,10 @@ public:
 
         dest[di] = '\0';
         // на конце может оставаться значимый пробел
-        while(di > 0 && dest[--di] == ' ')
+        while (di > 0 && dest[--di] == ' ')
         {
             dest[di] = '\0';
-        }        
+        }
     }
 
     bool start(int port, bool isFirstTime)
