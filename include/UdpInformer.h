@@ -1,175 +1,37 @@
 #pragma once
 
 #include <ESP8266WiFi.h>
-// #include <ESPAsyncUDP.h>
 #include <WiFiUdp.h>
 #include <GParser.h>
 
 #include "DicList.h"
-
-// в этом адресе хранится кол-во элементов словаря
-// сами элементы начинаются со 130 адреса
-const uint16_t BEG_EEPROM_DIC_DATA = 129;
-
-char packetBuffer[255];     // buffer to hold incoming packet
-char ReplyBuffer[] = "ack"; // a string to send back
-
-// структура хранения элемента словаря в EEPROM
-struct EEDicItem
-{
-    char role[20];
-    char addr[12];
-};
-
-static int stupid_pos = 0;
-void cbStupidSaveDicItem(const char *id, const char *data, int index)
-{
-    EEDicItem item;
-    strcpy(item.role, id);
-    strcpy(item.addr, data);
-    EEPROM.put(stupid_pos, item);
-    stupid_pos += sizeof(item);
-}
 
 // предоставление mac-адресов основных узлов остальным устройствам
 // через UDP для будущего общения через ESP-NOW
 class UdpInformer
 {
 private:
-    // AsyncUDP udp;
     WiFiUDP udp;
     DicList *dic;
-    uint16_t beg_eeprom;
-    uint16_t eeprom_dic_size;
 
-    void reset()
+    // Callbacks
+    // Telegram Token changed
+    void (*cbReceiveToken)(const char *token);
+    // Telegram Group changed
+    void (*cbReceiveGroup)(const char *group);
+    // Send alert
+    void (*cbAlert)(const char *token);
+
+    void onToken(const char *token)
     {
-        for (uint16_t i = beg_eeprom; i < eeprom_dic_size; i++)
-        {
-            EEPROM[i] = 0x00;
-        }
-        EEPROM.commit();
+        if (cbReceiveToken != NULL)
+            cbReceiveToken(token);
     }
 
-    void loadDic()
+    void onGroup(const char *group)
     {
-        EEDicItem item;
-        uint8_t count = EEPROM[BEG_EEPROM_DIC_DATA];
-        uint16_t save_pos = BEG_EEPROM_DIC_DATA + 1;
-
-        for (int i = 0; i < count; i++)
-        {
-            EEPROM.get(save_pos, item);
-            save_pos += sizeof(item);
-            dic->set(item.role, item.addr);
-        }
-    }
-
-    // нещадящее (пока) сохранение всех элементов коллекции
-    // надо сделать запись только измененных элементов
-    // костыль - сохранение через внешнюю функцию!!!
-    void saveDic()
-    {
-        uint8_t count = (uint8_t)dic->Count();
-        EEPROM[BEG_EEPROM_DIC_DATA] = count;
-        stupid_pos = BEG_EEPROM_DIC_DATA + 1;
-        dic->forEach(&cbStupidSaveDicItem);
-        EEPROM.commit();
-    }
-
-    bool isCmd(const char *cmd, char *data)
-    {
-        size_t cmd_len = strlen(cmd);
-        size_t data_len = strlen(data);
-        // команда длиннее, чем анализируемый текст
-        // т.е. явно не та команда
-        if (data_len < cmd_len)
-        {
-            return false;
-        }
-
-        // длина команды не менее 3 символов?
-        if (cmd_len >= 3)
-        {
-            // команда совпала?
-            if (strncmp(cmd, data, cmd_len) == 0)
-            {
-                // забрать параметры
-                // нет параметров?
-                if (cmd_len == data_len)
-                {
-                    data[0] = '\0';
-                }
-                else
-                {
-                    size_t prm_len = data_len - cmd_len;
-                    strncpy(data, data + cmd_len, prm_len);
-                    data[prm_len] = '\0';
-                }
-
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    void response(const char *answer, IPAddress host, uint16_t port)
-    {
-        udp.beginPacket(host, port);
-        udp.write(answer);
-        udp.endPacket();
-    }
-
-    void onReceive(int size)
-    {
-        IPAddress remoteIp = udp.remoteIP();
-        uint16_t port = udp.localPort();
-
-        char buf[255];
-
-        int len = udp.read(buf, 255);
-        buf[len] = '\0';
-
-        char text[255];
-        normalize(buf, text);
-        Serial.println(text);
-
-        if (isCmd("set role ", text))
-        {
-            Serial.printf("set role: [%s]\n", text);
-            GParser data(text, ' ');
-            int count = data.split();
-            if(count == 2)
-            {
-                dic->set(data[0], data[1]);
-                response("ok", remoteIp, port);
-            }
-            else
-            {
-                sprintf(buf, "use: set role <name> <macaddr>");
-                response(buf, remoteIp, port);
-            }
-        }
-
-        if (isCmd("get role ", text))
-        {
-            Serial.printf("get role: [%s]\n", text);
-            GParser data(text, ' ');
-            int count = data.split();
-            for (int i = 0; i < count; i++)
-            {
-                Serial.printf("\t%s\n", data[i]);
-            }
-        }
-
-    }
-
-public:
-    UdpInformer(uint16_t sizeEEPROM)
-    {
-        dic = new DicList;
-        eeprom_dic_size = sizeEEPROM;
+        if (cbReceiveGroup != NULL)
+            cbReceiveGroup(group);
     }
 
     // нормализация пробелов + trim
@@ -214,17 +76,179 @@ public:
         }
     }
 
-    bool start(int port, bool isFirstTime)
+    bool isCmd(
+        const char *cmd,  // команда с которой происходит сравнение
+        const char *data, // принятый текст
+        char *rest        // выделенные здесь параметры команды
+    )
     {
-        if (false)
+        size_t cmd_len = strlen(cmd);
+        size_t data_len = strlen(data);
+        // команда длиннее, чем анализируемый текст
+        // т.е. явно не та команда
+        if (data_len < cmd_len)
         {
-            if (isFirstTime)
-            {
-                reset();
-            }
-            loadDic();
+            return false;
         }
-        return udp.begin(port) == 1;
+
+        // длина команды не менее 3 символов?
+        if (cmd_len >= 3)
+        {
+            // команда совпала?
+            if (strncmp(cmd, data, cmd_len) == 0)
+            {
+                // забрать параметры
+                // нет параметров?
+                if (cmd_len == data_len)
+                {
+                    rest[0] = '\0';
+                }
+                else
+                {
+                    // get role broker
+                    // 6 = 15 - 9
+                    size_t prm_len = data_len - cmd_len;
+                    //
+                    strncpy(rest, data + cmd_len, prm_len);
+                    rest[prm_len] = '\0';
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void response(const char *answer, IPAddress host, uint16_t port)
+    {
+        udp.beginPacket(host, port);
+        udp.write(answer);
+        udp.endPacket();
+    }
+
+    void onReceive(int size)
+    {
+        IPAddress remoteIp = udp.remoteIP();
+        uint16_t port = udp.localPort();
+
+        char buf[255];
+
+        int len = udp.read(buf, 255);
+        buf[len] = '\0';
+
+        char text[255];
+        normalize(buf, text);
+        Serial.println(text);
+
+        if (isCmd("set role ", text, buf))
+        {
+            GParser data(buf, ' ');
+            int count = data.split();
+            if (count == 2)
+            {
+                dic->set(data[0], data[1]);
+                response(data[1], remoteIp, port);
+
+                // если регистрируется брокер,
+                // то надо подписаться на тему уведомлений
+                if (strcmp(data[0], "broker") == 0)
+                {
+                }
+            }
+            else
+            {
+                sprintf(buf, "use: set role <name> <macaddr>");
+                response(buf, remoteIp, port);
+            }
+        }
+
+        if (isCmd("get role ", text, buf))
+        {
+            GParser data(buf, ' ');
+            int count = data.split();
+            if (count == 1)
+            {
+                const char *val = dic->get(buf);
+                if (val == NULL)
+                {
+                    response("\0", remoteIp, port);
+                }
+                else
+                {
+                    response(val, remoteIp, port);
+                }
+            }
+            else
+            {
+                sprintf(buf, "use: get role <name>");
+                response(buf, remoteIp, port);
+            }
+        }
+
+        if (isCmd("set tlg-token ", text, buf))
+        {
+            GParser data(buf, ' ');
+            int count = data.split();
+            if (count == 1 && strlen(text) > 0)
+            {
+                onToken(buf);
+                response(buf, remoteIp, port);
+            }
+            else
+            {
+                sprintf(buf, "use: set tlg-token <token>");
+                response(buf, remoteIp, port);
+            }
+        }
+
+        if (isCmd("set tlg-group ", text, buf))
+        {
+            GParser data(buf, ' ');
+            int count = data.split();
+            if (count == 1 && strlen(text) > 0)
+            {
+                onGroup(buf);
+                response(buf, remoteIp, port);
+            }
+            else
+            {
+                sprintf(buf, "use: set tlg-group <group>");
+                response(buf, remoteIp, port);
+            }
+        }
+    }
+
+public:
+    UdpInformer(uint16_t sizeEEPROM)
+    {
+        dic = new DicList;
+    }
+
+    // установка колбэков
+    // смена токена телеграма
+    void setTokenCallback(void (*userDefinedCallback)(const char *token))
+    {
+        cbReceiveToken = userDefinedCallback;
+    }
+
+    // смена группы телеграма
+    void setGroupCallback(void (*userDefinedCallback)(const char *token))
+    {
+        cbReceiveGroup = userDefinedCallback;
+    }
+
+    // передача уведомления
+    void setAlertCallback(void (*userDefinedCallback)(const char *token))
+    {
+        cbAlert = userDefinedCallback;
+    }
+
+    bool start(int port)
+    {
+        bool started = udp.begin(port) == 1;
+        broadcast("wakeup");
+        return started;
     }
 
     void tick()
@@ -236,6 +260,12 @@ public:
         }
     }
 
+    void alert(const char *text)
+    {
+        if (cbAlert != NULL)
+            cbAlert(text);
+    }
+
     void broadcast(const char *text)
     {
         IPAddress addr = WiFi.localIP();
@@ -243,15 +273,5 @@ public:
         udp.beginPacket(addr, udp.localPort());
         udp.print(text);
         udp.endPacket();
-    }
-
-    void addResource(const char *id, const char *addr)
-    {
-        dic->set(id, addr);
-    }
-
-    const char *getResourceAddr(const char *resourceId)
-    {
-        return dic->get(resourceId);
     }
 };
