@@ -1,10 +1,16 @@
 #pragma once
 
+#ifdef ESP8266
 #include <ESP8266WiFi.h>
+#else
+#include <WiFi.h>
+#endif
+
 #include <WiFiUdp.h>
 #include <GParser.h>
-
-#include "DicList.h"
+#include <DicList.h>
+#include <ATools.h>
+#include <EspNowConnector.h>
 
 // предоставление mac-адресов основных узлов остальным устройствам
 // через UDP для будущего общения через ESP-NOW
@@ -13,6 +19,7 @@ class UdpInformer
 private:
     WiFiUDP udp;
     DicList *dic;
+    EspNowConnector conn;
 
     // Callbacks
     // Telegram Token changed
@@ -34,92 +41,6 @@ private:
             cbReceiveGroup(group);
     }
 
-    // нормализация пробелов + trim
-    void normalize(const char *sour, char *dest)
-    {
-        int sour_len = strlen(sour);
-        if (sour_len == 0)
-        {
-            dest[0] = '\0';
-            return;
-        }
-
-        int di = 0;
-        bool prev_space = true;
-        for (int si = 0; si < sour_len; si++)
-        {
-            // обработка пробелов
-            if (sour[si] == ' ')
-            {
-                // ранее было не начало строки и не пробел?
-                if (!prev_space)
-                {
-                    // значимый пробел (после непробельного символа)
-                    dest[di++] = sour[si];
-                    // но след.пробел надо пропустить
-                    prev_space = true;
-                }
-            }
-            // пришел не пробел
-            else
-            {
-                dest[di++] = sour[si];
-                prev_space = false;
-            }
-        }
-
-        dest[di] = '\0';
-        // на конце может оставаться значимый пробел
-        while (di > 0 && dest[--di] == ' ')
-        {
-            dest[di] = '\0';
-        }
-    }
-
-    bool isCmd(
-        const char *cmd,  // команда с которой происходит сравнение
-        const char *data, // принятый текст
-        char *rest        // выделенные здесь параметры команды
-    )
-    {
-        size_t cmd_len = strlen(cmd);
-        size_t data_len = strlen(data);
-        // команда длиннее, чем анализируемый текст
-        // т.е. явно не та команда
-        if (data_len < cmd_len)
-        {
-            return false;
-        }
-
-        // длина команды не менее 3 символов?
-        if (cmd_len >= 3)
-        {
-            // команда совпала?
-            if (strncmp(cmd, data, cmd_len) == 0)
-            {
-                // забрать параметры
-                // нет параметров?
-                if (cmd_len == data_len)
-                {
-                    rest[0] = '\0';
-                }
-                else
-                {
-                    // get role broker
-                    // 6 = 15 - 9
-                    size_t prm_len = data_len - cmd_len;
-                    //
-                    strncpy(rest, data + cmd_len, prm_len);
-                    rest[prm_len] = '\0';
-                }
-
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     void response(const char *answer, IPAddress host, uint16_t port)
     {
         udp.beginPacket(host, port);
@@ -138,10 +59,10 @@ private:
         buf[len] = '\0';
 
         char text[255];
-        normalize(buf, text);
+        ATools::normalize(buf, text);
         Serial.println(text);
 
-        if (isCmd("set role ", text, buf))
+        if (ATools::isCmd("set role ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -154,6 +75,8 @@ private:
                 // то надо подписаться на тему уведомлений
                 if (strcmp(data[0], "broker") == 0)
                 {
+                    // отправка происходите через ESP-NOW
+                    conn.send(data[1], "sub alert");
                 }
             }
             else
@@ -163,7 +86,7 @@ private:
             }
         }
 
-        if (isCmd("get role ", text, buf))
+        if (ATools::isCmd("get role ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -186,7 +109,7 @@ private:
             }
         }
 
-        if (isCmd("set tlg-token ", text, buf))
+        if (ATools::isCmd("set tlg-token ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -202,7 +125,7 @@ private:
             }
         }
 
-        if (isCmd("set tlg-group ", text, buf))
+        if (ATools::isCmd("set tlg-group ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -220,7 +143,7 @@ private:
     }
 
 public:
-    UdpInformer(uint16_t sizeEEPROM)
+    UdpInformer()
     {
         dic = new DicList;
     }
@@ -244,10 +167,19 @@ public:
         cbAlert = userDefinedCallback;
     }
 
+    void setEspMsgCallback(esp_now_recv_cb_t onMsg)
+    {
+        conn.setReceiveCallback(onMsg);
+    }
+
     bool start(int port)
     {
+        conn.start();
         bool started = udp.begin(port) == 1;
-        broadcast("wakeup");
+        if (started)
+        {
+            broadcast("wakeup");
+        }
         return started;
     }
 

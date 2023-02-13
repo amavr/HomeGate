@@ -6,36 +6,33 @@ uint16_t sizeEEPROM = 512;
 WiFiController ctrl;
 
 #include "UdpInformer.h"
-UdpInformer informer(sizeEEPROM);
+UdpInformer informer;
 
 #include <FastBot.h>
 FastBot bot;
 
 struct TBotCfg
 {
-    // размер с запасом
-    char token[60] = "";
-    char chatId[16] = "-833347396";
+    char token[60] = ""; // 60 - размер токена с запасом
+    char chatId[16] = "";
 } botCfg;
 
 void loadBotCfg()
 {
-    uint16_t addr = ctrl.useEEPROMSize();
+    uint16_t addr = ctrl.useEEPROMSize() + 2;
     EEPROM.get(addr, botCfg);
 }
 
 void saveBotCfg()
 {
-    uint16_t addr = ctrl.useEEPROMSize();
+    uint16_t addr = ctrl.useEEPROMSize() + 2;
     EEPROM.put(addr, botCfg);
     EEPROM.commit();
 }
 
-// сброс настроек
+// сброс настроек: сохранение корректных, но пустых настроек
 void reset()
 {
-    EEPROM[128] = 0xff;
-    EEPROM.commit();
     saveBotCfg();
 }
 
@@ -70,6 +67,13 @@ void onAlert(const char *text)
     Serial.printf("Alert: %s\n", text);
 }
 
+void OnEspNowMsg(uint8_t *mac, uint8_t *data, uint8_t len)
+{
+    char addr[18];
+    ATools::macToChars(mac, addr);
+    Serial.printf("ADDR:%s\tMSG:%s\n", addr, (char*)data);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -77,11 +81,11 @@ void setup()
 
     EEPROM.begin(sizeEEPROM);
 
-    // reset();
-
     // Признак первого запуска
-    bool isFirstTime = EEPROM[128] != 0x22;
+    bool isFirstTime = EEPROM[0] != 0x22;
     Serial.printf("isFirstTime: %d\n", isFirstTime);
+    if (isFirstTime)
+        reset();
 
     // подключение к WiFi
     ctrl.connect(isFirstTime);
@@ -90,6 +94,8 @@ void setup()
     informer.setTokenCallback(onTlgToken);
     informer.setGroupCallback(onTlgGroup);
     informer.setAlertCallback(onAlert);
+    informer.setEspMsgCallback(OnEspNowMsg);
+    
     bool res = informer.start(2222);
     Serial.printf("UDPInformer started:%s\n", res ? "Y" : "N");
 
@@ -97,7 +103,7 @@ void setup()
     // EEPROM проинициализирована, поэтому сброс флага первого запуска
     if (isFirstTime)
     {
-        EEPROM[128] = 0x22;
+        EEPROM[0] = 0x22;
         EEPROM.commit();
     }
 
