@@ -115,6 +115,8 @@ void setup()
     bot.sendMessage("started");
 }
 
+int sub_alert_timeout = 30000;
+
 void loop()
 {
     // проверка WiFi и если требуется - подключение

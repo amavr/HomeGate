@@ -71,13 +71,15 @@ private:
                 dic->set(data[0], data[1]);
                 response(data[1], remoteIp, port);
 
-                // если регистрируется брокер,
-                // то надо подписаться на тему уведомлений
-                if (strcmp(data[0], "broker") == 0)
-                {
-                    // отправка происходите через ESP-NOW
-                    conn.send(data[1], "sub alert");
-                }
+                // // если регистрируется брокер,
+                // // то надо подписаться на тему уведомлений
+                // if (strcmp(data[0], "broker") == 0)
+                // {
+                //     // сопряжение с брокером
+                //     conn.pair(data[1]);
+                //     // отправка происходите через ESP-NOW
+                //     conn.send(data[1], "sub alert");
+                // }
             }
             else
             {
@@ -85,8 +87,7 @@ private:
                 response(buf, remoteIp, port);
             }
         }
-
-        if (ATools::isCmd("get role ", text, buf))
+        else if (ATools::isCmd("get role ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -108,8 +109,7 @@ private:
                 response(buf, remoteIp, port);
             }
         }
-
-        if (ATools::isCmd("set tlg-token ", text, buf))
+        else if (ATools::isCmd("set tlg-token ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -124,8 +124,7 @@ private:
                 response(buf, remoteIp, port);
             }
         }
-
-        if (ATools::isCmd("set tlg-group ", text, buf))
+        else if (ATools::isCmd("set tlg-group ", text, buf))
         {
             GParser data(buf, ' ');
             int count = data.split();
@@ -142,6 +141,7 @@ private:
         }
     }
 
+    uint32_t last_time = 0;
 public:
     UdpInformer()
     {
@@ -185,6 +185,18 @@ public:
 
     void tick()
     {
+        if(millis() - last_time > 60000 || millis() < last_time)
+        {
+            const char *brokerMac = dic->get("broker");
+            if(brokerMac != NULL)
+            {
+                conn.pair(brokerMac);
+                conn.send(brokerMac, "sub alert");
+            }
+
+            last_time = millis();
+        }
+
         int packetSize = udp.parsePacket();
         if (packetSize)
         {
