@@ -12,13 +12,14 @@
 #include <ATools.h>
 #include <EspNowConnector.h>
 
+#include <DicFile.h>
+
 // предоставление mac-адресов основных узлов остальным устройствам
 // через UDP для будущего общения через ESP-NOW
 class UdpInformer
 {
 private:
     WiFiUDP udp;
-    DicList *dic;
     EspNowConnector conn;
 
     // Callbacks
@@ -68,18 +69,21 @@ private:
             int count = data.split();
             if (count == 2)
             {
+                Serial.printf("[%s][%s]\n", data[0], data[1]);
                 dic->set(data[0], data[1]);
                 response(data[1], remoteIp, port);
 
-                // // если регистрируется брокер,
-                // // то надо подписаться на тему уведомлений
-                // if (strcmp(data[0], "broker") == 0)
-                // {
-                //     // сопряжение с брокером
-                //     conn.pair(data[1]);
-                //     // отправка происходите через ESP-NOW
-                //     conn.send(data[1], "sub alert");
-                // }
+                DicFile::save("/dic.txt", dic);
+
+                // если регистрируется брокер,
+                // то надо подписаться на тему уведомлений
+                if (strcmp(data[0], "broker") == 0)
+                {
+                    // сопряжение с брокером
+                    conn.pair(data[1]);
+                    // отправка происходите через ESP-NOW
+                    conn.send(data[1], "sub alert");
+                }
             }
             else
             {
@@ -142,10 +146,14 @@ private:
     }
 
     uint32_t last_time = 0;
+
 public:
+    DicList *dic;
+
     UdpInformer()
     {
         dic = new DicList;
+        // DicFile::remove("/dic.txt");
     }
 
     // установка колбэков
@@ -174,28 +182,25 @@ public:
 
     bool start(int port)
     {
-        conn.start();
-        bool started = udp.begin(port) == 1;
-        if (started)
-        {
-            broadcast("wakeup");
-        }
-        return started;
+        Serial.println("Resources loading");
+        DicFile::load("/dic.txt", dic);
+        dic->set("gate", WiFi.macAddress().c_str());
+        return udp.begin(port) == 1;
     }
 
     void tick()
     {
-        if(millis() - last_time > 60000 || millis() < last_time)
-        {
-            const char *brokerMac = dic->get("broker");
-            if(brokerMac != NULL)
-            {
-                conn.pair(brokerMac);
-                conn.send(brokerMac, "sub alert");
-            }
+        // if (millis() - last_time > 60000 || millis() < last_time)
+        // {
+        //     const char *brokerMac = dic->get("broker");
+        //     if (brokerMac != NULL)
+        //     {
+        //         conn.pair(brokerMac);
+        //         conn.send(brokerMac, "sub alert");
+        //     }
 
-            last_time = millis();
-        }
+        //     last_time = millis();
+        // }
 
         int packetSize = udp.parsePacket();
         if (packetSize)
