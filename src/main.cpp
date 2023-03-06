@@ -71,6 +71,11 @@ void onTlgMsg(FB_msg &msg)
     //   Serial.print(", ");
     Serial.println(msg.text);
 
+    if(msg.text == "/close")
+    {
+        bot.closeMenu();
+    }
+
     // выводим всю информацию о сообщении
     // Serial.println(msg.toString());
 }
@@ -93,7 +98,7 @@ void OnEspNowMsg(uint8_t *mac, uint8_t *data, uint8_t len)
     char *msg = (char *)malloc(len);
     memcpy(msg, data, len);
     q.push(&msg);
-    Serial.printf("ADDR:%s\tMSG:%s\n", addr, text.c_str());
+    Serial.printf("%s -> %s\n", addr, msg);
     // bot.sendMessage(text);
 }
 
@@ -138,6 +143,7 @@ void setup()
     bot.setChatID(botCfg.chatId);
     bot.attach(onTlgMsg);
     bot.sendMessage("started");
+    // bot.showMenu("/alert 83 \t /state \n /close");
 
     // запуск UDP регистратора инфраструктуры
     bool res = informer.start(2222);
@@ -166,14 +172,8 @@ void loop()
     {
         char *msg;
         q.pop(&msg);
-        Serial.printf("%d recv: %s\n", ++i, msg);
         bot.sendMessage(msg);
         free(msg);
-
-        // q.pop(&text);
-        // Serial.printf("%d recv: %s\n", ++i, text.c_str());
-        // bot.sendMessage(text.c_str());
-        // text.clear();
 
         Serial.printf("heap: %d\n", ESP.getFreeHeap());
     }
